@@ -1,0 +1,32 @@
+{
+  "id": "01_full_context_contact_centre",
+  "persona": "High-volume recruiter",
+  "facts": {
+    "role": "Contact centre agent",
+    "seniority": "Entry-Level",
+    "skills": [],
+    "test_categories": [
+      "Simulations"
+    ],
+    "assessment_goals": "Screen CS aptitude for high-volume inbound hires",
+    "remote_required": true,
+    "max_duration_minutes": 45,
+    "languages": [
+      "English"
+    ],
+    "language_scope": "english_acceptable",
+    "volume_or_scale": "50 hires",
+    "channel_or_work_context": "Inbound calls / UK contact centre",
+    "context_summary": "UK entry-level contact centre inbound English remote max 45 min screening"
+  },
+  "conversation": [
+    {
+      "role": "user",
+      "content": "We are hiring fifty entry-level contact centre agents in the UK handling inbound calls\u2014English only. We need screening under forty-five minutes total per candidate where possible and remote delivery. We especially want simulations or realistic phone-style assessments plus customer-service orientation and aptitude for multitasking. What SHL assessments should we use?"
+    }
+  ],
+  "expected_assessments": [
+    "Customer Service Phone Simulation"
+  ],
+  "expectations": {}
+}

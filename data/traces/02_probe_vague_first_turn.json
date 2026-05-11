@@ -1,0 +1,15 @@
+{
+  "id": "02_probe_vague_first_turn",
+  "persona": "Vague shopper",
+  "facts": {},
+  "conversation": [
+    {
+      "role": "user",
+      "content": "I need an assessment."
+    }
+  ],
+  "expected_assessments": [],
+  "expectations": {
+    "first_turn_recommendations_empty": true
+  }
+}

@@ -26,8 +26,8 @@
 
 ## Evaluation approach
 
-- **Manual / ad hoc:** Exercise `POST /chat` with realistic multi-turn histories; use `print_chat.py` to avoid truncated JSON in shells.
-- **Qualitative checklist:** Empty recommendations when clarifying; catalog URLs only in shortlists; compare answers grounded in retrieved catalog blocks.
+- **Harness:** ``evaluate.py`` — ``--init`` ensures ``data/traces/``, seeds sample traces, and refreshes ``data/evaluation_rubric.json`` from the **embedded default** (optional local ``instructions.json`` → ``scoring_rubric`` override when that file exists). Replay mode scores **hard evals**, **Recall@10** (API + offline retrieval), **URL/catalog groundedness**, **retrieval alignment**, and a **composite effectiveness** score into ``data/eval_results.json``. Deploy does **not** require ``instructions.json``.
+- **Manual / ad hoc:** ``print_chat.py`` or curl/PowerShell for spot checks without traces.
 
 ## What did not work (or needed iteration)
 

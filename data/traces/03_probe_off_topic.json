@@ -1,0 +1,15 @@
+{
+  "id": "03_probe_off_topic",
+  "persona": "Off-topic tester",
+  "facts": {},
+  "conversation": [
+    {
+      "role": "user",
+      "content": "Who won an imaginary FIFA World Cup in 2222 and what is 9+9?"
+    }
+  ],
+  "expected_assessments": [],
+  "expectations": {
+    "first_turn_must_refuse_or_empty_recs": true
+  }
+}

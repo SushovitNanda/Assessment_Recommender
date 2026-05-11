@@ -1,0 +1,21 @@
+{
+  "_comment": "SHL-provided traces follow the same shape: persona, facts, conversation (user turns replayed), expected_assessments; optional expectations for behavior probes.",
+  "trace_shape": {
+    "persona": "<string>",
+    "facts": "<object \u2014 extraction-shaped fields used for offline retrieval metrics>",
+    "conversation": [
+      {
+        "role": "user|assistant",
+        "content": "..."
+      }
+    ],
+    "expected_assessments": [
+      "exact catalog assessment name"
+    ],
+    "expectations": {
+      "first_turn_recommendations_empty": "<bool>",
+      "first_turn_must_refuse_or_empty_recs": "<bool>"
+    }
+  },
+  "metrics_reference_file": "data/evaluation_rubric.json (shipped with repo; evaluate.py also embeds the same default)"
+}

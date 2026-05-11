@@ -1,0 +1,23 @@
+{
+  "hard_evals": {
+    "weight": "Must pass — failure here means zero score",
+    "checks": [
+      "Every response matches the {reply, recommendations, end_of_conversation} schema exactly",
+      "Every URL in recommendations comes from the SHL catalog",
+      "Conversation never exceeds 8 turns"
+    ]
+  },
+  "recall_at_10": {
+    "weight": "Primary quality metric",
+    "definition": "Recall@10 = (relevant assessments in top 10 recommendations) / (total relevant assessments for query). Averaged across all traces including holdout set."
+  },
+  "behavior_probes": {
+    "weight": "Secondary quality metric",
+    "examples": [
+      "Agent refuses off-topic queries",
+      "Agent does not recommend on turn 1 for a vague query",
+      "Agent honors mid-conversation refinements",
+      "Hallucination rate across all turns"
+    ]
+  }
+}

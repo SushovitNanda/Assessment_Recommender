@@ -3,7 +3,7 @@ uvicorn[standard]==0.30.6
 pydantic==2.8.2
 fastembed>=0.8.0
 faiss-cpu==1.13.2
-openai==1.51.0
+openai==1.30.5
 numpy==1.26.4
 requests==2.32.3
 python-dotenv==1.0.1

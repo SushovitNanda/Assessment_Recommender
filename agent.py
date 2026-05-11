@@ -15,8 +15,8 @@ import os
 import re
 from typing import Optional
 
+import google.generativeai as genai
 from dotenv import load_dotenv
-from openai import OpenAI
 
 from catalog import (
     format_recommendation_test_type,
@@ -34,53 +34,92 @@ from schemas import ChatResponse, Message, Recommendation
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# LLM client (Gemini 3.1 Flash Lite via OpenAI-compatible SDK)
+# Gemini (google.generativeai)
 # ---------------------------------------------------------------------------
-#
-# Google's quota/RPC errors sometimes mention older Flash SKUs inside
-# quotaDimensions—that reflects how the API meters usage, not necessarily
-# the literal model id sent in the request.
 
 
 def get_gemini_model_id() -> str:
-    """Model id for chat completions; override via GEMINI_MODEL in `env`."""
+    """Generative AI model id; override via GEMINI_MODEL in `env`."""
     load_dotenv("env", override=True)
     v = (os.environ.get("GEMINI_MODEL") or "gemini-3.1-flash-lite").strip()
     return v or "gemini-3.1-flash-lite"
 
 
+def configure_gemini() -> None:
+    """Load API key from `env` and call genai.configure. Run once at app startup."""
+    load_dotenv("env", override=True)
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        raise EnvironmentError("GEMINI_API_KEY environment variable not set in env file.")
+    genai.configure(api_key=api_key)
+
+
+def _openai_roles_to_gemini_chat(
+    messages: list[dict],
+) -> tuple[Optional[str], list[dict], str]:
+    """
+    Split legacy OpenAI-style messages into Gemini chat pieces.
+    Returns (system_instruction, history_without_last_turn, last_user_text).
+    """
+    system_instruction: Optional[str] = None
+    sequence: list[dict] = []
+
+    for msg in messages:
+        role = msg["role"]
+        content = msg.get("content", "")
+        if role == "system":
+            system_instruction = content
+            continue
+        gemini_role = "user" if role == "user" else "model"
+        sequence.append({"role": gemini_role, "parts": [content]})
+
+    if not sequence or sequence[-1]["role"] != "user":
+        raise ValueError("Gemini chat requires the final message role to be 'user'.")
+    history = sequence[:-1]
+    last_user = sequence[-1]["parts"][0]
+    return system_instruction, history, last_user
+
+
+def _response_text_gemini(resp) -> str:
+    """Best-effort text extraction (handles blocked / empty responses)."""
+    try:
+        return (resp.text or "").strip()
+    except ValueError:
+        logger.warning("Gemini response had no aggregated .text — reading candidates.")
+        buf: list[str] = []
+        for cand in (getattr(resp, "candidates", None) or []):
+            content = getattr(cand, "content", None)
+            if not content or not getattr(content, "parts", None):
+                continue
+            for p in content.parts:
+                if hasattr(p, "text") and p.text:
+                    buf.append(p.text)
+        return "".join(buf).strip()
+
+
 def _chat_once(
-    client: OpenAI,
     messages: list[dict],
     max_tokens: int,
     temperature: float,
 ) -> str:
-    """
-    Single Gemini completion call.
-    """
-    model_id = get_gemini_model_id()
-    resp = client.chat.completions.create(
-        model=model_id,
-        max_tokens=max_tokens,
+    """Single Gemini generate call using chat history + last user message."""
+    model_name = get_gemini_model_id()
+    system_instruction, history, last_user = _openai_roles_to_gemini_chat(messages)
+
+    gen_cfg = genai.GenerationConfig(
+        candidate_count=1,
+        max_output_tokens=max_tokens,
         temperature=temperature,
-        messages=messages,
     )
-    return resp.choices[0].message.content or ""
 
+    gm_kw: dict = {"model_name": model_name}
+    if system_instruction:
+        gm_kw["system_instruction"] = system_instruction
 
-def _make_client() -> OpenAI:
-    # Use only the local `env` file for key loading.
-    load_dotenv("env", override=True)
-
-    api_key = os.environ.get("GEMINI_API_KEY")
-    if not api_key:
-        raise EnvironmentError("GEMINI_API_KEY environment variable not set in env file.")
-    return OpenAI(
-        api_key=api_key,
-        base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
-        max_retries=0,
-        timeout=20.0,
-    )
+    model = genai.GenerativeModel(**gm_kw)
+    chat = model.start_chat(history=history)
+    resp = chat.send_message(last_user, generation_config=gen_cfg)
+    return _response_text_gemini(resp)
 
 
 # ---------------------------------------------------------------------------
@@ -505,10 +544,7 @@ def normalize_extracted(extracted: dict, user_text: str) -> dict:
 # Extraction
 # ---------------------------------------------------------------------------
 
-def extract_context(
-    messages: list[Message],
-    client: OpenAI,
-) -> dict:
+def extract_context(messages: list[Message]) -> dict:
     """
     Use a lightweight LLM call to extract structured fields from conversation.
     Returns dict with role, seniority, skills, test_categories, filters, etc.
@@ -520,10 +556,9 @@ def extract_context(
 
     try:
         raw = _chat_once(
-            client=client,
+            [{"role": "user", "content": prompt}],
             max_tokens=1024,
             temperature=0.0,
-            messages=[{"role": "user", "content": prompt}],
         )
         parsed = _safe_json(raw)
         if isinstance(parsed, dict):
@@ -542,7 +577,6 @@ def handle_compare(
     user_message: str,
     messages: list[Message],
     retriever: SHLRetriever,
-    client: OpenAI,
 ) -> ChatResponse:
     """
     Handle a comparison request.
@@ -589,12 +623,14 @@ def handle_compare(
     )
 
     try:
-        reply_text = _chat_once(
-            client=client,
-            max_tokens=600,
-            temperature=0.1,
-            messages=[{"role": "user", "content": compare_prompt}],
-        ) or "Unable to generate comparison."
+        reply_text = (
+            _chat_once(
+                [{"role": "user", "content": compare_prompt}],
+                max_tokens=600,
+                temperature=0.1,
+            )
+            or "Unable to generate comparison."
+        )
     except Exception as e:
         logger.error(f"Compare LLM call failed: {e}")
         reply_text = "I encountered an error generating the comparison. Please try again."
@@ -632,11 +668,12 @@ def run_agent(
     messages: list[Message],
     retriever: SHLRetriever,
     catalog: list[dict],
-    client: Optional[OpenAI] = None,
 ) -> ChatResponse:
     """
     Main agent entry point.
     Called once per POST /chat request.
+
+    Prerequisites: configure_gemini() has been invoked at startup (sets API key).
 
     Flow:
     1. Guard: out-of-scope / injection → refuse
@@ -647,9 +684,6 @@ def run_agent(
     6. Call LLM → parse structured response
     7. Validate all URLs against catalog before returning
     """
-    if client is None:
-        client = _make_client()
-
     last_user = next(
         (m.content for m in reversed(messages) if m.role == "user"), ""
     )
@@ -673,7 +707,7 @@ def run_agent(
     # Guard: compare intent
     # -----------------------------------------------------------------------
     if _looks_like_compare(last_user):
-        return handle_compare(last_user, messages, retriever, client)
+        return handle_compare(last_user, messages, retriever)
 
     # -----------------------------------------------------------------------
     # Guard: vague first turn -> single clarifying question
@@ -688,7 +722,7 @@ def run_agent(
     # -----------------------------------------------------------------------
     # Extract structured context
     # -----------------------------------------------------------------------
-    extracted = extract_context(messages, client)
+    extracted = extract_context(messages)
     combined_user_text = _combined_user_text(messages)
     logger.debug(f"Extracted context: {extracted}")
 
@@ -742,10 +776,9 @@ def run_agent(
     # -----------------------------------------------------------------------
     try:
         raw_output = _chat_once(
-            client=client,
+            llm_messages,
             max_tokens=1000,
             temperature=0.2,
-            messages=llm_messages,
         )
     except Exception as e:
         logger.error(f"Main LLM call failed: {e}")

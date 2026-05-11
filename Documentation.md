@@ -8,7 +8,7 @@
 - **Two LLM calls per recommendation turn** — A dedicated **extraction** pass produces structured slots and query fodder; the **main** call generates strict JSON (`reply` + `recommendations`). Trade-off: extra latency and token cost vs. stuffing everything into one brittle completion.
 - **Slot gating instead of a fixed turn count** — Early prototypes used a hard minimum number of user messages; that produced unnecessary clarifications when one long message already contained every constraint. The current design requires **role, seniority, focus (what to measure), language/locale, and logistics (time + remote)** before committing to a shortlist, with regex backfills in `normalize_extracted` when the extractor misses surface cues.
 - **URL safety** — Recommended names are validated against the catalog; **URLs always come from catalog entries**, not from the model, so hallucinated links cannot reach the client.
-- **Gemini via OpenAI-compatible base URL** — Keeps a single client pattern (`openai` SDK) while targeting Google’s endpoint; model id configurable with `GEMINI_MODEL`.
+- **Gemini native SDK** — `google.generativeai` (`GenerativeModel` + chat history mirroring OpenAI roles: `assistant` mapped to Gemini `model`); model id configurable with `GEMINI_MODEL`.
 
 ## Retrieval setup
 

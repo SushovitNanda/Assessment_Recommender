@@ -6,20 +6,18 @@ Endpoints:
   GET  /health  — readiness check (returns {"status": "ok"})
   POST /chat    — stateless conversational agent endpoint
 
-All heavy state (catalog, FAISS index, LLM client) is loaded
+All heavy state (catalog, FAISS index, Gemini configuration) is loaded
 once during startup via the lifespan context manager so the
 first real /chat call is fast.
 """
 
 import logging
-import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
-from openai import OpenAI
 
-from agent import run_agent, _make_client, get_gemini_model_id
+from agent import configure_gemini, get_gemini_model_id, run_agent
 from catalog import load_catalog, build_catalog_index
 from retriever import SHLRetriever
 from schemas import ChatRequest, ChatResponse, HealthResponse
@@ -41,7 +39,6 @@ class AppState:
     catalog: list[dict] = []
     name_index: dict[str, dict] = {}
     retriever: SHLRetriever = None
-    llm_client: OpenAI = None
 
 
 state = AppState()
@@ -56,7 +53,7 @@ async def lifespan(app: FastAPI):
     Load all heavy resources at startup:
       1. Catalog JSON
       2. FAISS index (build or load from cache)
-      3. LLM client
+      3. Gemini API (google-generativeai)
 
     This runs during the cold-start window (up to 2 min allowed by evaluator)
     so that the first /chat call is fast.
@@ -79,14 +76,14 @@ async def lifespan(app: FastAPI):
     )
     logger.info("Retriever ready.")
 
-    # 3. LLM client
-    logger.info("Initializing LLM client...")
-    state.llm_client = _make_client()
+    # 3. Gemini
+    logger.info("Configuring Gemini (google.generativeai)...")
+    configure_gemini()
     logger.info(
-        "Gemini 3.1 Flash Lite chat-completions model id (this string is sent on every LLM request): "
+        "Gemini GenerativeModel id (used on every generation request): "
         f"{get_gemini_model_id()!r}"
     )
-    logger.info("LLM client ready.")
+    logger.info("Gemini ready.")
 
     logger.info("=== Startup complete. Service is ready. ===")
     yield
@@ -174,7 +171,6 @@ async def chat(request: ChatRequest) -> ChatResponse:
         messages=request.messages,
         retriever=state.retriever,
         catalog=state.catalog,
-        client=state.llm_client,
     )
 
     return response

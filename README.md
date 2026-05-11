@@ -7,7 +7,7 @@ Conversational API that helps hiring managers shortlist **SHL Individual Test So
 1. **Catalog** — Assessments live in `data/catalog.json`. Each row is validated, enriched with derived fields (`test_type`, `all_test_types`, `embedding_text`, duration, etc.).
 2. **Embeddings & index** — **FastEmbed** [`TextEmbedding`](https://qdrant.github.io/fastembed/) with **`BAAI/bge-small-en-v1.5`** (ONNX): catalog rows use `passage_embed`, search queries use `query_embed`. Vectors are stored in a **FAISS** `IndexFlatIP` index (cosine similarity on L2-normalized vectors). After changing the embedding model, delete `data/faiss.index` / `data/faiss_meta.pkl` and run `python build_index.py`.
 3. **Per-request retrieval** — The service expands the user context into several search queries, runs FAISS search, optionally applies soft metadata filters (duration, remote, test categories, job level), merges and deduplicates candidates.
-4. **LLM** — A **Google Generative Language** OpenAI-compatible endpoint (`gemini-3.1-flash-lite` by default) powers: structured **extraction** from the transcript, the main **recommend / clarify / compare** reply (JSON), optional **rerank** naming inside the agent flow, and **compare** narratives when the user contrasts named products.
+4. **LLM** — **`google.generativeai`** (**Gemini**; model id defaults to `gemini-3.1-flash-lite`, overridable with `GEMINI_MODEL`) powers structured **extraction** from the transcript, the main **recommend / clarify / compare** JSON reply, and grounded **compare** narratives when users name assessments.
 
 The API is **stateless**: every `POST /chat` must send the **full** `messages` history.
 

@@ -28,6 +28,11 @@ uvicorn main:app --host 0.0.0.0 --port 8000
 
 Health check: `GET http://127.0.0.1:8000/health`
 
+## Deployed API
+
+This assessment recommender is deployed on Render at:
+`https://assessment-recommender-t8pk.onrender.com`
+
 ## Repository layout
 
 ```text

@@ -5,7 +5,7 @@ Conversational API that helps hiring managers shortlist **SHL Individual Test So
 ## What this RAG stack does
 
 1. **Catalog** — Assessments live in `data/catalog.json`. Each row is validated, enriched with derived fields (`test_type`, `all_test_types`, `embedding_text`, duration, etc.).
-2. **Embeddings & index** — `sentence-transformers` (`all-MiniLM-L6-v2`) embeds each assessment’s `embedding_text`. Vectors are stored in a **FAISS** `IndexFlatIP` index (cosine similarity on L2-normalized vectors).
+2. **Embeddings & index** — **FastEmbed** [`TextEmbedding`](https://qdrant.github.io/fastembed/) with **`BAAI/bge-small-en-v1.5`** (ONNX): catalog rows use `passage_embed`, search queries use `query_embed`. Vectors are stored in a **FAISS** `IndexFlatIP` index (cosine similarity on L2-normalized vectors). After changing the embedding model, delete `data/faiss.index` / `data/faiss_meta.pkl` and run `python build_index.py`.
 3. **Per-request retrieval** — The service expands the user context into several search queries, runs FAISS search, optionally applies soft metadata filters (duration, remote, test categories, job level), merges and deduplicates candidates.
 4. **LLM** — A **Google Generative Language** OpenAI-compatible endpoint (`gemini-3.1-flash-lite` by default) powers: structured **extraction** from the transcript, the main **recommend / clarify / compare** reply (JSON), optional **rerank** naming inside the agent flow, and **compare** narratives when the user contrasts named products.
 
@@ -148,7 +148,7 @@ Use for readiness / cold-start probing.
 | Port already in use | Another process on `8000` — change port: `uvicorn main:app --port 8001` or free the port (OS-specific). |
 | Empty or odd recommendations | Ensure the user message (across history) fills **role, seniority, what to measure, language, logistics**; see `agent.py` slot helpers. |
 | Compare says product “not in catalog” | Names must resolve to catalog rows; optional suffixes like ` (New)` and trailing `?` are handled in `resolve_catalog_name`. Restart after pulling code changes. |
-| Stale retrieval | After large `catalog.json` edits, run `python build_index.py` (or delete `data/faiss.*` and restart to rebuild if configured to). |
+| Stale retrieval / wrong matches after a model swap | After large `catalog.json` edits or changing the FastEmbed model in `retriever.py`, run `python build_index.py` (or delete `data/faiss.index` and `data/faiss_meta.pkl` and restart). |
 | PowerShell truncates JSON | Use `python print_chat.py -m "your message"` or `ConvertTo-Json -Depth 10` and inspect `reply` / `recommendations` fields. |
 | Gemini **429** | Billing/quota on Google AI Studio; try later, another key, or set `GEMINI_MODEL` to an available SKU. |
 

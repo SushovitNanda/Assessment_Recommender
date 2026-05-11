@@ -9,17 +9,19 @@ Hybrid retrieval pipeline:
 
 Index is built once at startup and held in memory.
 No external vector store service required.
+
+Embeddings use FastEmbed BGE (`passage_embed` / `query_embed`). Rebuild the FAISS
+files after any change to ``EMBEDDING_MODEL`` in this module.
 """
 
 import os
-import json
 import logging
 import pickle
 from typing import Optional
 
 import faiss
 import numpy as np
-from sentence_transformers import SentenceTransformer
+from fastembed import TextEmbedding
 
 logger = logging.getLogger(__name__)
 
@@ -27,8 +29,8 @@ logger = logging.getLogger(__name__)
 INDEX_PATH = "data/faiss.index"
 META_PATH = "data/faiss_meta.pkl"
 
-# Model — small, fast, good semantic quality
-EMBEDDING_MODEL = "all-MiniLM-L6-v2"
+# ONNX embeddings via FastEmbed — BGE tuned for retrieval (passage vs query prefixes)
+EMBEDDING_MODEL = "BAAI/bge-small-en-v1.5"
 
 # How many candidates to pull before reranking
 CANDIDATE_POOL = 20
@@ -41,7 +43,7 @@ class SHLRetriever:
     """
 
     def __init__(self):
-        self.model: Optional[SentenceTransformer] = None
+        self.model: Optional[TextEmbedding] = None
         self.index: Optional[faiss.Index] = None
         self.metadata: list[dict] = []   # parallel list to FAISS vectors
         self.catalog: list[dict] = []    # full catalog for metadata filtering
@@ -64,8 +66,8 @@ class SHLRetriever:
         self.catalog = catalog
         self.name_index = name_index
 
-        logger.info("Loading sentence-transformer model...")
-        self.model = SentenceTransformer(EMBEDDING_MODEL)
+        logger.info("Loading FastEmbed model %r ...", EMBEDDING_MODEL)
+        self.model = TextEmbedding(model_name=EMBEDDING_MODEL)
 
         if not force_rebuild and os.path.exists(INDEX_PATH) and os.path.exists(META_PATH):
             logger.info("Loading cached FAISS index from disk...")
@@ -77,8 +79,11 @@ class SHLRetriever:
 
         logger.info(f"Building FAISS index for {len(catalog)} assessments...")
         texts = [entry["embedding_text"] for entry in catalog]
-        embeddings = self.model.encode(texts, show_progress_bar=False, batch_size=64)
-        embeddings = np.array(embeddings, dtype="float32")
+        # Corpus side: passage_embed applies BGE "passage:" prefix for retrieval
+        embeddings = np.array(
+            list(self.model.passage_embed(texts, batch_size=64)),
+            dtype="float32",
+        )
 
         # Normalize for cosine similarity
         faiss.normalize_L2(embeddings)
@@ -118,8 +123,11 @@ class SHLRetriever:
 
     def _vector_search(self, query: str, top_k: int = CANDIDATE_POOL) -> list[dict]:
         """Single query → top_k nearest neighbors by cosine similarity."""
-        vec = self.model.encode([query], show_progress_bar=False)
-        vec = np.array(vec, dtype="float32")
+        # Query side: query_embed applies BGE "query:" prefix
+        vec = np.array(
+            list(self.model.query_embed([query])),
+            dtype="float32",
+        )
         faiss.normalize_L2(vec)
 
         scores, indices = self.index.search(vec, top_k)

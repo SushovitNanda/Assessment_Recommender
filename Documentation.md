@@ -12,7 +12,7 @@
 
 ## Retrieval setup
 
-- **Vectors** — `all-MiniLM-L6-v2` on a concatenated `embedding_text` (name, description, SHL keys, job levels, duration, remote/adaptive flags, languages).
+- **Vectors** — FastEmbed `TextEmbedding` with **`BAAI/bge-small-en-v1.5`**: `passage_embed` for indexed catalog text, `query_embed` at search time, on a concatenated `embedding_text` (name, description, SHL keys, job levels, duration, remote/adaptive flags, languages).
 - **Index** — FAISS `IndexFlatIP` on L2-normalized embeddings (cosine similarity). Index and metadata are persisted (`data/faiss.index`, `data/faiss_meta.pkl`) so cold start avoids rebuilding.
 - **Query side** — Multi-string expansion from role, skills, test categories, seniority, and assessment goals; union of hits, **soft** metadata filters (if a filter zeroes results, it is relaxed), dedupe, score sort, cap before prompt injection.
 - **Compare path** — Sliding n-grams over the user question plus optional vector fallback; **relaxed name resolution** (punctuation, ` (New)` suffixes) so natural questions still resolve to catalog rows.
